@@ -5,7 +5,7 @@ import numpy as np
 import nltk
 import re
 import spacy
-import es_core_news_lg
+import es_core_news_md
 from nltk import FreqDist
 from lexical_diversity import lex_div as ld
 
@@ -52,7 +52,7 @@ def get_nsyllables(text):
 @st.cache(show_spinner = False)
 def get_news_features(headline, text):
     
-    nlp = es_core_news_lg.load()
+    nlp = es_core_news_md.load()
 
     ## headline ##
     headline = re.sub(r"http\S+", "", headline)
