@@ -198,7 +198,7 @@ initial_sidebar_state = 'expanded'
 
 # display title and description
 st.title("Detector de")
-st.image('./FAKE_NEWS_title.png', use_column_width = True, width = None, output_format = 'auto')
+st.image('./wordcloud_fakenews.png', use_column_width = True, width = None, output_format = 'auto')
 
 # text input for headline and new's content
 url = st.text_input("Pega el enlace de la noticia.")
