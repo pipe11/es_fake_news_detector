@@ -25,14 +25,16 @@ def extract_news(url):
         from newspaper import Article
         import tldextract
         
+        article = Article(url)
+        
         try:
             article.download()
+            
         except:
             st.error('**El formato introducido no es correcto.** Introduce unicamente la URL de un periódico.')
             st.write('**¡Prueba con otra!**')
             st.image('./error_darth_vader.png', use_column_width = True, width = None)
         
-        article = Article(url)
         article.download()
         article.parse()
         ext = tldextract.extract(url)
