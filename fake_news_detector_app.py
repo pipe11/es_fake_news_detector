@@ -228,8 +228,8 @@ def tokenize(text):
 def get_predictions(pickle_file, df_features):
     with st.spinner("Detectando..."):
         import pickle
-        model = pickle.load(open(pickle_file, 'rb'))
-        tfidf_vectorizer = pickle.load(open('../predictors/tfidf_vectorizer.pkl', 'rb'))
+        model = pickle.load(open(pickle_file_model, 'rb'))
+        tfidf_vectorizer = pickle.load(open(pickle_file_transformer, 'rb'))
         
         
         numeric_features = ['words_h', 'word_size_h', 'avg_syllables_word_h', 'unique_words_h', 'ttr_h', 'mltd_h', 'sents',
@@ -253,8 +253,9 @@ def get_predictions(pickle_file, df_features):
 #### streamlit configuration ####
 
 
-# load pickle file 
-pickle_file = './fake_news_predictorv4.pkl'
+# load pickle files
+pickle_file_model = './fake_news_predictorv4.pkl'
+pickle_file_transformer = './tfidf_vectorizer.pkl'
 
 # page configuration
 page_title = 'Fake News Detector'
