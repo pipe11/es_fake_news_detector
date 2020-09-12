@@ -282,8 +282,8 @@ if (url != ""):
     if detect(text) == 'es' and len(detect_langs(text)) == 1:
         df_features = get_news_features(headline, text)
         
-        prob_fake, prob_real = get_predictions(pickle_file, df_features)
-
+        prob_fake, prob_real = get_predictions(pickle_file_model, pickle_file_transformer, df_features)
+        
         if prob_fake >= 65:
             st.error('¡¡Esta noticia es **FALSA**!! :heavy_multiplication_x: \nCon una probabilidad del %d%%.' % int(prob_fake))
 
