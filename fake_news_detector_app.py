@@ -3,19 +3,35 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import nltk
+from nltk.corpus import stopwords  
+from nltk import word_tokenize    
+from nltk.stem import SnowballStemmer  
+from string import punctuation
 import re
 import spacy
+#need to switch to es_core_news_md pacy model. es_core_news_lg too large for Heroku.
 import es_core_news_md
 from nltk import FreqDist
 from lexical_diversity import lex_div as ld
+from sklearn.feature_extraction.text import TfidfVectorizer
+from scipy.sparse import hstack, csr_matrix
+from langdetect import detect
+from langdetect import detect_langs
 
 #### extract news with url ####
 
-@st.cache(show_spinner = False)
 def extract_news(url):
     with st.spinner("Detectando..."):
         from newspaper import Article
         import tldextract
+        
+        try:
+            article.download()
+        except:
+            st.error('**El formato introducido no es correcto.** Introduce unicamente la URL de un periódico.')
+            st.write('**¡Prueba con otra!**')
+            st.image('./error_darth_vader.png', use_column_width = True, width = None)
+        
         article = Article(url)
         article.download()
         article.parse()
@@ -64,8 +80,8 @@ def get_news_features(headline, text):
     headline = headline.replace(r"*PHONE*", "número")
     headline = headline.replace(r"*EMAIL*", "email")
     headline = headline.replace(r"*URL*", "url")
-    headline_new = headline.lower()
-    doc_h = nlp(headline_new)
+    headline_lower = headline.lower()
+    doc_h = nlp(headline_lower)
 
     list_tokens_h = []
     list_tags_h = []
@@ -151,8 +167,9 @@ def get_news_features(headline, text):
     sym_ratio = round((n_tag['SYM'] / words) * 100, 2)
 
     # create df_features
-    df_features = pd.DataFrame({'words_h': words_h, 'word_size_h': [avg_word_size_h],'avg_syllables_word_h': [avg_syllables_word_h],
-                                'unique_words_h': [unique_words_h], 'ttr_h': ttr_h, 'mltd_h': [mltd_h], 'sents': sents, 'words': words,
+    df_features = pd.DataFrame({'text': text_lower, 'headline':headline_lower, 'words_h': words_h, 'word_size_h': [avg_word_size_h],
+                                'avg_syllables_word_h': [avg_syllables_word_h],'unique_words_h': [unique_words_h], 
+                                'ttr_h': ttr_h, 'mltd_h': [mltd_h], 'sents': sents, 'words': words,
                                 'avg_words_sent': [avg_word_sentence], 'avg_word_size': [avg_word_size], 
                                 'avg_syllables_word': avg_syllables_word, 'unique_words': [unique_words], 
                                 'ttr': [ttr], 'huerta_score': [huerta_score], 'szigriszt_score': [szigriszt_score],
@@ -164,6 +181,44 @@ def get_news_features(headline, text):
     
     return df_features  
 
+#### TF-IDF Transformation ####
+
+#Stopword list to use
+spanish_stopwords = stopwords.words('spanish')
+
+#Spanish stemmer:
+stemmer = SnowballStemmer('spanish')
+
+@st.cache(show_spinner = False)
+def stem_tokens(tokens, stemmer):  
+    stemmed = []
+    for item in tokens:
+        stemmed.append(stemmer.stem(item))
+    return stemmed
+
+#Punctuation to remove
+non_words = list(punctuation)
+
+#Adding spanish punctuation
+non_words.extend(['¿', '¡', '‘', '’', '“', '”'])  
+non_words.extend(map(str, range(10)))
+
+@st.cache(show_spinner = False)
+def tokenize(text):  
+    #Remove punctuation
+    text = ''.join([c for c in text if c not in non_words])
+    #Tokenize
+    tokens =  word_tokenize(text)
+
+    #Stem
+    try:
+        stems = stem_tokens(tokens, stemmer)
+    except Exception as e:
+        print(e)
+        print(text)
+        stems = ['']
+    return stems
+
 
 #### predictions ####
 
@@ -172,6 +227,8 @@ def get_predictions(pickle_file, df_features):
     with st.spinner("Detectando..."):
         import pickle
         model = pickle.load(open(pickle_file, 'rb'))
+        tfidf_vectorizer = pickle.load(open('../predictors/tfidf_vectorizer.pkl', 'rb'))
+        
         
         numeric_features = ['words_h', 'word_size_h', 'avg_syllables_word_h', 'unique_words_h', 'ttr_h', 'mltd_h', 'sents',
                             'words', 'avg_words_sent', 'avg_word_size', 'avg_syllables_word', 'unique_words', 'ttr', 'mltd', 
@@ -179,17 +236,23 @@ def get_predictions(pickle_file, df_features):
                             'propn_ratio', 'noun_ratio', 'adp_ratio', 'det_ratio', 'punct_ratio', 'pron_ratio', 'verb_ratio', 
                             'adv_ratio', 'sym_ratio']
 
+        
+        #TF-IDF vectorization
+        text_predict_vectorized = tfidf_vectorizer.transform(df_features['text'])
+        X_predict = hstack([csr_matrix(df_features[numeric_features].values), text_predict_vectorized[0:]])
+
         # prediction
-        prediction = (model.predict(df_features[numeric_features])[0])
-        prob_fake = (model.predict_proba(df_features[numeric_features])[0][0])*100
-        prob_real = (model.predict_proba(df_features[numeric_features])[0][1])*100
+        prediction = (model.predict(X_predict)[0])
+        prob_fake = (model.predict_proba(X_predict)[0][0])*100
+        prob_real = (model.predict_proba(X_predict)[0][1])*100
     
     return prob_fake, prob_real
 
 #### streamlit configuration ####
 
+
 # load pickle file 
-pickle_file = './fake_news_predictorv3.pkl'
+pickle_file = './fake_news_predictorv4.pkl'
 
 # page configuration
 page_title = 'Fake News Detector'
@@ -201,30 +264,43 @@ st.title("Detector de")
 st.image('./wordcloud_fakenews.png', use_column_width = True, width = None, output_format = 'auto')
 
 # text input for headline and new's content
-url = st.text_input("Pega el enlace de la noticia.")
+try:
+    url = st.text_input("Pega el enlace de una noticia")
+except ValueError:
+    st.error('Por favor introduce un enlace únicamente')
+    st.image('./error_darth_vader.png', use_column_width = True, width = None)
+
 
 ## run functions##
 if (url != ""):
     
-    headline, text, author, newspaper, image_url = extract_news(url)
-    df_features = get_news_features(headline, text)
-    prob_fake, prob_real = get_predictions(pickle_file, df_features)
-
-
-    if prob_fake >= 65:
-        st.error('¡¡Esta noticia es **FALSA**!! :heavy_multiplication_x: \nCon una probabilidad del %d%%.' % int(prob_fake))
-
-    elif (65 >= prob_fake >= 35):
-        st.warning('¡Esta noticia es **ENGAÑOSA**! :exclamation: \nTiene una probabilidad de %d%% de ser verdadera.' % int(prob_real))
-
-    else:
-        st.success('Esta noticia es **VERDADERA** :white_check_mark: \nCon una probabilidad del %d%%.' % int(prob_real))
+    headline, text, author, newspaper, image_url = extract_news(url)       
     
-    st.title(headline)
-    st.write(newspaper)
-    st.image(image_url, use_column_width = True, width = None)
-    if author == []:
-        st.write('Autor no encontrado')
+    if detect(text) == 'es' and len(detect_langs(text)) == 1:
+        df_features = get_news_features(headline, text)
+        
+        prob_fake, prob_real = get_predictions(pickle_file, df_features)
+
+        if prob_fake >= 65:
+            st.error('¡¡Esta noticia es **FALSA**!! :heavy_multiplication_x: \nCon una probabilidad del %d%%.' % int(prob_fake))
+
+        elif (65 >= prob_fake >= 35):
+            st.warning('¡Esta noticia es **ENGAÑOSA**! :exclamation: \nTiene una probabilidad de %d%% de ser verdadera.' % int(prob_real))
+
+        else:
+            st.success('Esta noticia es **VERDADERA** :white_check_mark: \nCon una probabilidad del %d%%.' % int(prob_real))
+
+        st.title(headline)
+        st.write(newspaper)
+        st.image(image_url, use_column_width = True, width = None)
+        if author == []:
+            st.write('Autor no encontrado')
+        else:
+            st.write('Autor: ', author[0])
+        st.write('Noticia: ', text)
+        
     else:
-        st.write('Autor: ', author[0])
-    st.write('Noticia: ', text)
+        st.error('¡Esta noticia **no está en español** o tiene mucho contenido en otro idioma!')
+        st.write('**¡Prueba con otra!**')
+        st.image('./error_darth_vader.png', use_column_width = True, width = None)
+        
