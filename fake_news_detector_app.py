@@ -225,7 +225,7 @@ def tokenize(text):
 #### predictions ####
 
 @st.cache(show_spinner = False)
-def get_predictions(pickle_file, df_features):
+def get_predictions(pickle_file_model, pickle_file_transformer, df_features):
     with st.spinner("Detectando..."):
         import pickle
         model = pickle.load(open(pickle_file_model, 'rb'))
