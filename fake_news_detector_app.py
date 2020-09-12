@@ -29,14 +29,12 @@ def extract_news(url):
         
         try:
             article.download()
-            
+            article.parse()
         except:
             st.error('**El formato introducido no es correcto.** Introduce unicamente la URL de un periódico.')
             st.write('**¡Prueba con otra!**')
             st.image('./error_darth_vader.png', use_column_width = True, width = None)
-        
-        article.download()
-        article.parse()
+   
         ext = tldextract.extract(url)
         newspaper = ext.domain
         image_url = article.top_image
